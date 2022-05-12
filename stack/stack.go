@@ -8,7 +8,7 @@ type Stack[T any] interface {
 	Pop()
 }
 
-func MakeStack[T any]() Stack[T] { return &stack[T]{} }
+func NewStack[T any]() Stack[T] { return &stack[T]{} }
 
 type stack[T any] []T
 

@@ -9,7 +9,7 @@ type Queue[T any] interface {
 	Pop()
 }
 
-func MakeQueue[T any]() Queue[T] { return &queue[T]{} }
+func NewQueue[T any]() Queue[T] { return &queue[T]{} }
 
 type queue[T any] []T
 

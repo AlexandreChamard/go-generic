@@ -6,7 +6,7 @@ import (
 )
 
 func TestStack(t *testing.T) {
-	stack := MakeStack[int]() // Const value
+	stack := NewStack[int]() // Const value
 
 	for i := 0; i < 10; i++ {
 		stack.Push(i)
@@ -23,5 +23,8 @@ func TestStack(t *testing.T) {
 			t.Fatalf("%d: stack.Top(): expected %d got %d", i, 9-i, stack.Top())
 		}
 		stack.Pop()
+	}
+	if !stack.Empty() {
+		t.Fatalf("stack.Empty(): should be empty at the end")
 	}
 }

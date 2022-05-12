@@ -5,7 +5,7 @@ import (
 )
 
 func TestQueue(t *testing.T) {
-	queue := MakeQueue[int]() // Const value
+	queue := NewQueue[int]()
 
 	for i := 0; i < 10; i++ {
 		queue.Push(i)
@@ -24,5 +24,8 @@ func TestQueue(t *testing.T) {
 			t.Fatalf("%d: queue.Back(): expected %d got %d", i, 9, queue.Back())
 		}
 		queue.Pop()
+	}
+	if !queue.Empty() {
+		t.Fatalf("queue.Empty(): should be empty at the end")
 	}
 }

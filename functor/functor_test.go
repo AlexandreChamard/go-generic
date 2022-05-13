@@ -29,7 +29,7 @@ func TestFunctor(t *testing.T) {
 	}
 
 	for _, f := range functors {
-		f.Apply()
+		f()
 	}
 }
 
@@ -63,7 +63,7 @@ func BenchmarkFunctor(b *testing.B) {
 		)
 	}
 	for _, f := range functors {
-		f.Apply()
+		f()
 	}
 
 	b.StopTimer()

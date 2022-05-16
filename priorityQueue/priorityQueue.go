@@ -28,7 +28,10 @@ func (this *priorityQueue[T]) Push(info T) {
 	this.balanceUp(this.Size() - 1)
 }
 func (this *priorityQueue[T]) Pop() {
-	this.balancedBinTree = this.balancedBinTree[1:]
+	s := this.balancedBinTree
+	l := this.Size() - 1
+	s[0], s[l] = s[l], s[0]
+	this.balancedBinTree = s[:l]
 	this.balanceDown(0)
 }
 

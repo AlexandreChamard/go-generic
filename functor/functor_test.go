@@ -8,19 +8,19 @@ import (
 func TestFunctor(t *testing.T) {
 
 	functors := []Functor{
-		makeFunctor1(
+		MakeFunctor1(
 			func(i int) {
 				t.Log(i)
 			},
 			42,
 		),
-		makeFunctor2(
+		MakeFunctor2(
 			func(i int, s string) {
 				t.Log(i, s)
 			},
 			1, "foobar",
 		),
-		makeFunctor5(
+		MakeFunctor5(
 			func(i int, s string, b bool, pf *float64, a any) {
 				t.Log(i, s, b, pf, a)
 			},
@@ -42,19 +42,19 @@ func BenchmarkFunctor(b *testing.B) {
 	for i := 0; i < 1000; i++ {
 
 		functors = append(functors,
-			makeFunctor1(
+			MakeFunctor1(
 				func(i int) {
 					fmt.Println(i)
 				},
 				42,
 			),
-			makeFunctor2(
+			MakeFunctor2(
 				func(i int, s string) {
 					fmt.Println(i, s)
 				},
 				1, "foobar",
 			),
-			makeFunctor5(
+			MakeFunctor5(
 				func(i int, s string, b bool, pf *float64, a any) {
 					fmt.Println(i, s, b, pf, a)
 				},

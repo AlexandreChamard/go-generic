@@ -2,10 +2,11 @@ package threadpool
 
 import (
 	"fmt"
-	. "generic/functor"
-	priorityqueue "generic/priorityQueue"
 	"sync"
 	"time"
+
+	. "github.com/AlexandreChamard/go_generics/functor"
+	priorityqueue "github.com/AlexandreChamard/go_generics/priorityQueue"
 )
 
 type ThreadPool interface {

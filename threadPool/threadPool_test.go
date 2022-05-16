@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	. "generic/functor"
+	. "github.com/AlexandreChamard/go_generics/functor"
 )
 
 func TestThreadPool(t *testing.T) {

@@ -1,7 +1,7 @@
 package algorithm
 
 import (
-	. "generic/builtin"
+	. "github.com/AlexandreChamard/go_generics/builtin"
 )
 
 func Min[T Ord](a, b T) T {

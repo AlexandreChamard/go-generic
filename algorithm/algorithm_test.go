@@ -1,8 +1,9 @@
 package algorithm
 
 import (
-	. "generic/builtin"
 	"testing"
+
+	. "github.com/AlexandreChamard/go_generics/builtin"
 )
 
 func TestSort(t *testing.T) {

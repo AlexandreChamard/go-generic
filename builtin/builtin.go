@@ -13,7 +13,7 @@ type NumberType interface {
 }
 
 type Ord interface {
-	NumberType | string
+	NumberType | ~string
 }
 
 type Ordf[T any] func(a, b T) bool

@@ -9,7 +9,10 @@ import (
 )
 
 func TestThreadPool(t *testing.T) {
-	tp := NewThreadPool(100)
+	tp := NewThreadPool(ThreadPoolConfig{
+		PoolSize:  100,
+		EnableLog: true,
+	})
 
 	f := func(i int) {
 		time.Sleep(100 * time.Millisecond)
@@ -27,7 +30,10 @@ func TestThreadPool(t *testing.T) {
 func BenchmarkThreadPool(b *testing.B) {
 	b.Log("Start benchmark")
 
-	tp := NewThreadPool(1)
+	tp := NewThreadPool(ThreadPoolConfig{
+		PoolSize:  1,
+		EnableLog: true,
+	})
 
 	f := func(i int) { fmt.Println("coucou", i) }
 

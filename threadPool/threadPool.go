@@ -23,9 +23,14 @@ type ThreadPool interface {
 	Wait()
 }
 
+type ThreadPoolConfig struct {
+	PoolSize  int
+	EnableLog bool
+}
+
 // n: maximum number of parellel executions
-func NewThreadPool(n int) ThreadPool {
-	return makeAndStartThreadPool(n)
+func NewThreadPool(config ThreadPoolConfig) ThreadPool {
+	return makeAndStartThreadPool(config)
 }
 
 type State int
@@ -54,8 +59,10 @@ func compPriorityFunctor(a, b priorityFunctor) bool {
 type threadPool struct {
 	mutex sync.Mutex
 
-	n     int
-	state State
+	poolSize int
+	state    State
+
+	enableLog bool
 
 	pool priorityqueue.PriorityQueue[priorityFunctor]
 
@@ -83,7 +90,7 @@ func (this *threadPool) SubmitPriority(f Functor, priority int) {
 }
 
 func (this *threadPool) Stop() {
-	log(fmt.Sprintf("[threadPool.Stop] START"))
+	this.log(fmt.Sprintf("[threadPool.Stop] START"))
 	this.mutex.Lock()
 	if this.state != State_RUNNING {
 		this.mutex.Unlock()
@@ -95,7 +102,7 @@ func (this *threadPool) Stop() {
 	this.mutex.Unlock()
 
 	this.stoppedChan = make(chan bool)
-	log(fmt.Sprintf("[threadPool.Stop] END"))
+	this.log(fmt.Sprintf("[threadPool.Stop] END"))
 }
 
 func (this *threadPool) ForceStop() {
@@ -104,9 +111,9 @@ func (this *threadPool) ForceStop() {
 }
 
 func (this *threadPool) Wait() {
-	log(fmt.Sprintf("[threadPool.Wait] START"))
+	this.log(fmt.Sprintf("[threadPool.Wait] START"))
 	<-this.stoppedChan // wait until fully stopped
-	log(fmt.Sprintf("[threadPool.Wait] END"))
+	this.log(fmt.Sprintf("[threadPool.Wait] END"))
 }
 
 func (this *threadPool) Running() bool {
@@ -119,11 +126,13 @@ func (this *threadPool) runningNotSafe() bool {
 	return this.state == State_RUNNING
 }
 
-func makeAndStartThreadPool(n int) *threadPool {
+func makeAndStartThreadPool(config ThreadPoolConfig) *threadPool {
 	pool := &threadPool{
-		n:     n,
-		state: State_RUNNING,
-		mutex: sync.Mutex{},
+		poolSize: config.PoolSize,
+		state:    State_RUNNING,
+		mutex:    sync.Mutex{},
+
+		enableLog: config.EnableLog,
 
 		pool:    priorityqueue.NewPriorityQueue(compPriorityFunctor),
 		workers: make(map[int]bool),
@@ -135,9 +144,9 @@ func makeAndStartThreadPool(n int) *threadPool {
 		stoppedChan:    make(chan bool),
 	}
 
-	log(fmt.Sprintf("Start thread pool"))
+	pool.log(fmt.Sprintf("Start thread pool"))
 
-	for len(pool.workers) < pool.n {
+	for len(pool.workers) < pool.poolSize {
 		pool.startWorker()
 	}
 
@@ -145,7 +154,7 @@ func makeAndStartThreadPool(n int) *threadPool {
 	thread_pool_loop:
 		for this.runningNotSafe() {
 
-			log(fmt.Sprintf("thread pool: wait for action"))
+			this.log(fmt.Sprintf("thread pool: wait for action"))
 
 			if this.pool.Empty() {
 				select {
@@ -160,7 +169,7 @@ func makeAndStartThreadPool(n int) *threadPool {
 							break thread_pool_loop
 						}
 						this.pool.Push(task)
-						log(fmt.Sprintf("new task in the pool (%d)", this.pool.Size()))
+						this.log(fmt.Sprintf("new task in the pool (%d)", this.pool.Size()))
 					}
 				case workerId := <-this.stopWorkerChan:
 					{
@@ -185,7 +194,7 @@ func makeAndStartThreadPool(n int) *threadPool {
 							break thread_pool_loop
 						}
 						this.pool.Push(task)
-						log(fmt.Sprintf("new task in the pool (%d)\n", this.pool.Size()))
+						this.log(fmt.Sprintf("new task in the pool (%d)\n", this.pool.Size()))
 					}
 				case workerId := <-this.stopWorkerChan:
 					{
@@ -201,19 +210,19 @@ func makeAndStartThreadPool(n int) *threadPool {
 			case this.workerChan <- this.pool.Front():
 				{
 					// A worker took a task
-					log(fmt.Sprintf("a worker has taken a task"))
+					this.log(fmt.Sprintf("a worker has taken a task"))
 					this.pool.Pop()
 				}
 			}
 		}
 
-		log(fmt.Sprintf("close worker chan"))
+		this.log(fmt.Sprintf("close worker chan"))
 		this.state = State_STOPPED
 		close(this.workerChan)
 
 		// Wait for all workers are closed
 		for len(this.workers) > 0 {
-			log(fmt.Sprintf("wait for worker end (%d)", len(this.workers)))
+			this.log(fmt.Sprintf("wait for worker end (%d)", len(this.workers)))
 			workerId := <-this.stopWorkerChan
 			this.endWorker(workerId)
 		}
@@ -231,13 +240,13 @@ func (this *threadPool) startWorker() {
 	this.workers[id] = true
 	this.mutex.Unlock()
 
-	log(fmt.Sprintf("new worker %d", id))
+	this.log(fmt.Sprintf("new worker %d", id))
 
 	go func() {
 		// TODO should check is this is worker should be remove (not implemented yet)
 	worker_loop:
 		for {
-			log(fmt.Sprintf("%d waits for a task", id))
+			this.log(fmt.Sprintf("%d waits for a task", id))
 			select {
 			case functor, ok := <-this.workerChan:
 				{
@@ -245,29 +254,25 @@ func (this *threadPool) startWorker() {
 						// Channel workerChan is closed
 						break worker_loop
 					}
-					log(fmt.Sprintf("worker %d received a task", id))
+					this.log(fmt.Sprintf("worker %d received a task", id))
 					if functor.f != nil {
 						functor.f()
 					}
 				}
 			}
 		}
-		log(fmt.Sprintf("worker %d end", id))
+		this.log(fmt.Sprintf("worker %d end", id))
 		this.stopWorkerChan <- id
 	}()
 }
 
 func (this *threadPool) endWorker(workerId int) {
-	log(fmt.Sprintf("worker %d has ended\n", workerId))
+	this.log(fmt.Sprintf("worker %d has ended\n", workerId))
 	delete(this.workers, workerId)
 }
 
-const (
-	LOG_ENABLED = true
-)
-
-func log(s string) {
-	if LOG_ENABLED {
+func (t *threadPool) log(s string) {
+	if t.enableLog {
 		fmt.Println(s)
 	}
 }

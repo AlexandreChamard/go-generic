@@ -15,9 +15,8 @@ type Cache[Key comparable, Value any] interface {
 }
 
 type cacheOptions struct {
-	cacheDuration       time.Duration
-	maxSize             int // Infinite size if 0
-	forceDeletionOffset int // Whenever the cache will force deletion on some values, it will remove that amount of values
+	cacheDuration time.Duration // No expiration on 0
+	maxSize       int           // No size limit on 0
 }
 
 func NewCacheOptions() *cacheOptions {
@@ -26,9 +25,22 @@ func NewCacheOptions() *cacheOptions {
 	}
 }
 
-func (this *cacheOptions) SetCacheDuration(cacheDuration time.Duration) *cacheOptions {
+func (this *cacheOptions) CacheDuration(cacheDuration time.Duration) *cacheOptions {
 	this.cacheDuration = cacheDuration
 	return this
+}
+
+func (this *cacheOptions) NoExpiration() *cacheOptions {
+	return this.CacheDuration(0)
+}
+
+func (this *cacheOptions) MaxSize(maxSize int) *cacheOptions {
+	this.maxSize = maxSize
+	return this
+}
+
+func (this *cacheOptions) NoSizeLimit() *cacheOptions {
+	return this.MaxSize(0)
 }
 
 // options must be define - use the NewCacheOptions to get the default values
@@ -39,6 +51,7 @@ func NewCache[Key comparable, Value any](options *cacheOptions) Cache[Key, Value
 	cache := &cache[Key, Value]{
 		data:          map[Key]mapData[Value]{},
 		cacheDuration: options.cacheDuration,
+		maxSize:       options.maxSize,
 
 		running:  true,
 		pingChan: make(chan bool),
@@ -65,7 +78,7 @@ func NewCache[Key comparable, Value any](options *cacheOptions) Cache[Key, Value
 	go func() {
 		for cache.running {
 			cache.mutex.RLock()
-			if cache.pqueue.Empty() {
+			if cache.pqueue.Empty() || cache.pqueue.Front().deleteAt == (time.Time{}) {
 				cache.mutex.RUnlock()
 				select {
 				case <-cache.pingChan:
@@ -91,6 +104,7 @@ type cache[Key comparable, Value any] struct {
 	data          map[Key]mapData[Value]
 	pqueue        *priorityQueue[pqueueData[Key]]
 	cacheDuration time.Duration
+	maxSize       int
 
 	running  bool
 	pingChan chan bool
@@ -108,6 +122,14 @@ type pqueueData[Key any] struct {
 }
 
 func (this *cache[Key, Value]) Set(key Key, value Value) {
+	this.set(key, value, this.cacheDuration)
+}
+
+func (this *cache[Key, Value]) SetWithExpiration(key Key, value Value, expiration time.Duration) {
+	this.set(key, value, expiration)
+}
+
+func (this *cache[Key, Value]) set(key Key, value Value, expiration time.Duration) {
 	if !this.running {
 		return
 	}
@@ -117,16 +139,19 @@ func (this *cache[Key, Value]) Set(key Key, value Value) {
 
 	if _, ok := this.data[key]; ok {
 		// if the key is aready defined, just reset its deletion time
-		this.resetDuration(key)
+		this.resetExpiration(key, this.cacheDuration)
 	} else {
-		// if not, insert the it in the map and the pqueue
+		if this.maxSize > 0 && len(this.data) >= this.maxSize {
+			this.deleteElements(len(this.data) - this.maxSize + 1)
+		}
+		// if not, insert it in the map and the pqueue
 		this.data[key] = mapData[Value]{
 			value: value,
 			pos:   this.pqueue.Size(),
 		}
 		this.pqueue.Push(pqueueData[Key]{
 			key:      key,
-			deleteAt: time.Now().Add(this.cacheDuration),
+			deleteAt: computeExpirationTimestamp(expiration),
 		})
 	}
 	select {
@@ -147,21 +172,24 @@ func (this *cache[Key, Value]) Get(key Key) (Value, bool) {
 		this.mutex.Lock()
 		defer this.mutex.Unlock()
 
-		this.resetDuration(key)
+		this.resetExpiration(key, this.cacheDuration)
 	}()
 
 	return data.value, ok
 }
 
-func (this *cache[Key, Value]) resetDuration(key Key) {
+func (this *cache[Key, Value]) resetExpiration(key Key, expiration time.Duration) {
+	deletedAt := computeExpirationTimestamp(expiration)
+
 	data, ok := this.data[key]
-	if !ok {
+	if !ok || this.pqueue.balancedBinTree[data.pos].deleteAt.After(deletedAt) {
 		return
 	}
+
 	// rebalance the tree with the new deletion time
 	this.pqueue.balancedBinTree[data.pos] = pqueueData[Key]{
 		key:      key,
-		deleteAt: time.Now().Add(this.cacheDuration),
+		deleteAt: deletedAt,
 	}
 	this.pqueue.balanceUp(data.pos)
 	// get another time the data because the position may have changed
@@ -172,7 +200,13 @@ func (this *cache[Key, Value]) deleteExpiredItems() {
 	this.mutex.Lock()
 	defer this.mutex.Unlock()
 
-	for !this.pqueue.Empty() && this.pqueue.Front().deleteAt.Before(time.Now()) {
+	for !this.pqueue.Empty() && toDelete(this.pqueue.Front().deleteAt) {
+		this.deleteElements(1)
+	}
+}
+
+func (this *cache[Key, Value]) deleteElements(n int) {
+	for ; !this.pqueue.Empty() && n > 0; n-- {
 		key := this.pqueue.Front().key
 		this.pqueue.Pop()
 		delete(this.data, key)
@@ -208,9 +242,20 @@ func (this *cache[Key, Value]) Stop() {
 	close(this.pingChan)
 }
 
+func computeExpirationTimestamp(expiration time.Duration) time.Time {
+	if expiration > 0 {
+		return time.Now().Add(expiration)
+	}
+	return time.Time{}
+}
+
+func toDelete(t time.Time) bool {
+	return t != time.Time{} && t.Before(time.Now())
+}
+
 /*
 Redefine a priorityQueue because we need to rebalance the tree sometimes
-and we need to know the position externaly
+and we need to know the position from an external point of view
 */
 
 func NewPriorityQueue[T any](comp func(a, b T) bool, swap func(a, b T)) *priorityQueue[T] {

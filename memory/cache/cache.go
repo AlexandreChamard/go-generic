@@ -135,11 +135,10 @@ func (this *cache[Key, Value]) set(key Key, value Value, expiration time.Duratio
 	}
 
 	this.mutex.Lock()
-	defer this.mutex.Unlock()
 
-	if _, ok := this.data[key]; ok {
+	if data, ok := this.data[key]; ok {
 		// if the key is aready defined, just reset its deletion time
-		this.resetExpiration(key, this.cacheDuration)
+		this.resetExpiration(key, data, this.cacheDuration)
 	} else {
 		if this.maxSize > 0 && len(this.data) >= this.maxSize {
 			this.deleteElements(len(this.data) - this.maxSize + 1)
@@ -154,6 +153,7 @@ func (this *cache[Key, Value]) set(key Key, value Value, expiration time.Duratio
 			deleteAt: computeExpirationTimestamp(expiration),
 		})
 	}
+	this.mutex.Unlock()
 	select {
 	case this.pingChan <- true:
 	default:
@@ -162,29 +162,22 @@ func (this *cache[Key, Value]) set(key Key, value Value, expiration time.Duratio
 
 func (this *cache[Key, Value]) Get(key Key) (Value, bool) {
 	this.mutex.RLock()
-	defer this.mutex.RUnlock()
-
 	data, ok := this.data[key]
+	this.mutex.RUnlock()
 
 	// reset the key duration in the cache
 	// can e done asynchronously to not wait for it
 	go func() {
 		this.mutex.Lock()
-		defer this.mutex.Unlock()
-
-		this.resetExpiration(key, this.cacheDuration)
+		this.resetExpiration(key, data, this.cacheDuration)
+		this.mutex.Unlock()
 	}()
 
 	return data.value, ok
 }
 
-func (this *cache[Key, Value]) resetExpiration(key Key, expiration time.Duration) {
+func (this *cache[Key, Value]) resetExpiration(key Key, data mapData[Value], expiration time.Duration) {
 	deletedAt := computeExpirationTimestamp(expiration)
-
-	data, ok := this.data[key]
-	if !ok || this.pqueue.balancedBinTree[data.pos].deleteAt.After(deletedAt) {
-		return
-	}
 
 	// rebalance the tree with the new deletion time
 	this.pqueue.balancedBinTree[data.pos] = pqueueData[Key]{
@@ -198,11 +191,10 @@ func (this *cache[Key, Value]) resetExpiration(key Key, expiration time.Duration
 
 func (this *cache[Key, Value]) deleteExpiredItems() {
 	this.mutex.Lock()
-	defer this.mutex.Unlock()
-
 	for !this.pqueue.Empty() && toDelete(this.pqueue.Front().deleteAt) {
 		this.deleteElements(1)
 	}
+	this.mutex.Unlock()
 }
 
 func (this *cache[Key, Value]) deleteElements(n int) {
@@ -219,9 +211,8 @@ func (this *cache[Key, Value]) Clear() {
 	}
 
 	this.mutex.Lock()
-	defer this.mutex.RLock()
-
 	this.clear()
+	this.mutex.Unlock()
 }
 
 func (this *cache[Key, Value]) clear() {

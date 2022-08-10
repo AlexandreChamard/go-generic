@@ -5,8 +5,8 @@ import (
 	"sync"
 	"time"
 
-	. "github.com/AlexandreChamard/go_generics/algorithm"
-	priorityqueue "github.com/AlexandreChamard/go_generics/priorityQueue"
+	. "github.com/AlexandreChamard/go-generic/algorithm"
+	priorityqueue "github.com/AlexandreChamard/go-generic/priorityQueue"
 )
 
 type Cache[Key comparable, Value any] interface {

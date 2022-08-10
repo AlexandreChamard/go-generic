@@ -3,7 +3,7 @@ package algorithm
 import (
 	"testing"
 
-	. "github.com/AlexandreChamard/go_generics/builtin"
+	. "github.com/AlexandreChamard/go-generic/builtin"
 )
 
 func TestSort(t *testing.T) {

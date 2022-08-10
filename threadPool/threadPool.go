@@ -5,8 +5,8 @@ import (
 	"sync"
 	"time"
 
-	. "github.com/AlexandreChamard/go_generics/functor"
-	priorityqueue "github.com/AlexandreChamard/go_generics/priorityQueue"
+	. "github.com/AlexandreChamard/go-generic/functor"
+	priorityqueue "github.com/AlexandreChamard/go-generic/priorityQueue"
 )
 
 type ThreadPool interface {
